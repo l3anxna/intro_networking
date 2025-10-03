@@ -4,26 +4,28 @@
 LiquidCrystal_I2C lcd(0x20, 16, 2);
 
 const String symbols = "ABCDEFGHIJKLMNOPQRSTUVWXYZ_,.() ";
-char message[16];
+
+const int ledPin = 13;
+const int MAX_LEN = 64;   // safe buffer size
+char message[MAX_LEN];
 int index = 0;
 
+// Read framed symbol (Start, Data, Stop)
 int read5BitWithFrame() {
-  // Wait for start bit
   while (Serial.available() == 0);
   int startBit = Serial.read();
-  if (startBit != 0) return -1; // error, ignore
+  if (startBit != 0) return -1;
 
   int val = 0;
   for (int i = 0; i < 5; i++) {
-    while (Serial.available() == 0); // wait for data bit
+    while (Serial.available() == 0);
     int bit = Serial.read();
     val = (val << 1) | (bit & 1);
   }
 
-  // Wait for stop bit
   while (Serial.available() == 0);
   int stopBit = Serial.read();
-  if (stopBit != 1) return -1; // error, ignore
+  if (stopBit != 1) return -1;
 
   return val;
 }
@@ -39,24 +41,42 @@ void setup() {
   lcd.init();
   lcd.backlight();
   lcd.noBlink();
+
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
   message[0] = '\0';
 }
 
 void loop() {
-  int val = read5BitWithFrame();
-  if (val >= 0 && index < 15) {
-    message[index++] = symbols[val];
-    message[index] = '\0';
-  }
+  if (Serial.available()) {
+    // Look if it's a command
+    if (Serial.peek() == '/') {
+      String cmd = Serial.readStringUntil('\n');
+      if (cmd == "/b") {
+        index = 0;
+        message[0] = '\0';
+        digitalWrite(ledPin, LOW);   // Reset LED at start
+      }
+      else if (cmd == "/s") {
+        digitalWrite(ledPin, HIGH);  // Turn LED ON when done
+      }
+    }
+    else {
+      // Otherwise framed symbol
+      int val = read5BitWithFrame();
+      if (val >= 0 && index < MAX_LEN - 1) {  // prevent overflow
+        message[index++] = symbols[val];
+        message[index] = '\0';  // keep null-terminated string
 
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(message);
-  lcd.setCursor(index, 0);
-  lcd.cursor(); // static cursor
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print(message);     // top line: received message
+        lcd.setCursor(index, 0);
+        lcd.cursor();
 
-  if (index > 0) {
-    lcd.setCursor(0, 1);
-    print5Bit(val); // 5-bit of last character
+        lcd.setCursor(0, 1);
+        print5Bit(val);         // bottom line: binary
+      }
+    }
   }
 }

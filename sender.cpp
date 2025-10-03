@@ -3,27 +3,33 @@
 
 LiquidCrystal_I2C lcd(0x20, 16, 2);
 
+// Custom 5-bit symbol table
 const String symbols = "ABCDEFGHIJKLMNOPQRSTUVWXYZ_,.() ";
-const char *message = "HELLO WORLD";
 
+// Change message here (any length up to buffer)
+const char *message = "DEAR EVAN HANSEN";
+
+// Find index of character in the symbols table
 int getSymbolIndex(char c) {
   for (int i = 0; i < symbols.length(); i++) {
     if (symbols[i] == c) return i;
   }
-  return symbols.length() - 1; // default to space
+  return symbols.length() - 1;  // Default to space if not found
 }
 
+// Send one symbol as Start(0) + 5 bits + Stop(1)
 void send5BitWithFrame(char c) {
   int val = getSymbolIndex(c);
 
-  Serial.write(0); // Start bit
+  Serial.write(0);                   // Start bit
   for (int i = 4; i >= 0; i--) {
     int bit = (val >> i) & 1;
-    Serial.write(bit); // Data bits
+    Serial.write(bit);
   }
-  Serial.write(1); // Stop bit
+  Serial.write(1);                   // Stop bit
 }
 
+// Print binary of symbol on LCD
 void print5Bit(char c) {
   int val = getSymbolIndex(c);
   for (int i = 4; i >= 0; i--) {
@@ -39,21 +45,25 @@ void setup() {
 }
 
 void loop() {
+  Serial.println("/b");  // Begin transmission
+
   for (int i = 0; message[i] != '\0'; i++) {
     char currentChar = message[i];
 
-    send5BitWithFrame(currentChar);
+    send5BitWithFrame(currentChar);  // Send framed bits
 
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print(message);
     lcd.setCursor(i, 0);
-    lcd.cursor(); // static cursor
+    lcd.cursor();
 
     lcd.setCursor(0, 1);
     print5Bit(currentChar);
 
-    delay(1000); // slower transmission
+    delay(1000);  // Slow down for visibility
   }
-  while (1); // stop after sending
+
+  Serial.println("/s");  // End transmission
+  while (1);             // Stop loop
 }
